@@ -68,7 +68,7 @@ jobs:
       - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
         # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
-        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        uses: craigsloggett/publish-pull-request-summary@f8a8c0651e685ddb88542a5d248673400ab70b71 # unreleased
         with:
           url: ${{ steps.create-github-pull-request.outputs.url }}
 
@@ -141,7 +141,7 @@ jobs:
       - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
         # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
-        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        uses: craigsloggett/publish-pull-request-summary@f8a8c0651e685ddb88542a5d248673400ab70b71 # unreleased
         with:
           url: ${{ steps.create-github-pull-request.outputs.url }}
 
@@ -214,7 +214,7 @@ jobs:
       - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
         # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
-        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        uses: craigsloggett/publish-pull-request-summary@f8a8c0651e685ddb88542a5d248673400ab70b71 # unreleased
         with:
           url: ${{ steps.create-github-pull-request.outputs.url }}
 
@@ -287,6 +287,6 @@ jobs:
       - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
         # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
-        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        uses: craigsloggett/publish-pull-request-summary@f8a8c0651e685ddb88542a5d248673400ab70b71 # unreleased
         with:
           url: ${{ steps.create-github-pull-request.outputs.url }}
