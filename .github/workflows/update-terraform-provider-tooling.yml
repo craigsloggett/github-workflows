@@ -7,10 +7,6 @@ on:
         description: Token used to check out, push branches, and open pull requests.
         required: true
 
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: false
-
 permissions:
   contents: write
   pull-requests: write
