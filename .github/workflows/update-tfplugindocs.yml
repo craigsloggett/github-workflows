@@ -1,0 +1,86 @@
+name: Update tfplugindocs
+
+on:
+  workflow_call:
+    secrets:
+      GH_TOKEN:
+        description: Token used to check out, push branches, and open pull requests.
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  tfplugindocs:
+    name: tfplugindocs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Resolve Latest Version
+        id: latest
+        run: |
+          version="$(
+            curl -sf https://proxy.golang.org/github.com/hashicorp/terraform-plugin-docs/@latest |
+              jq -r '.Version // empty'
+          )"
+          [ -n "${version}" ] || { echo 'failed to resolve tfplugindocs version' >&2; exit 1; }
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+
+      - name: Bump Lint Workflow
+        id: bump-lint
+        uses: craigsloggett/bump-version@85e673033cf965281d41ec89c94189a335fa7633 # v1.1.1
+        with:
+          file: .github/workflows/lint.yml
+          key: >-
+            .jobs.tfplugindocs.steps[] |
+            select(.run | test("tfplugindocs")) |
+            .env.TFPLUGINDOCS_VERSION
+          version: ${{ steps.latest.outputs.version }}
+
+      - name: Bump Makefile
+        id: bump-makefile
+        uses: craigsloggett/bump-version@85e673033cf965281d41ec89c94189a335fa7633 # v1.1.1
+        with:
+          file: Makefile
+          key: TFPLUGINDOCS_VERSION
+          version: ${{ steps.latest.outputs.version }}
+
+      - name: Create GitHub Pull Request
+        if: >-
+          steps.bump-lint.outputs.changed == 'true' ||
+          steps.bump-makefile.outputs.changed == 'true'
+        id: create-github-pull-request
+        uses: craigsloggett/create-github-pull-request@29f3cbd0faff8c1bc2bfebc5cf1598fb8b6f417e # v1.1.0
+        with:
+          title: 'chore(build): Bump tfplugindocs to ${{ steps.latest.outputs.version }}'
+          body: >-
+            Bump the pinned `tfplugindocs` version in `lint.yml` and `Makefile` to
+            `${{ steps.latest.outputs.version }}`
+          branch: update/bump-tfplugindocs-${{ steps.latest.outputs.version }}
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Publish Available Updates in Step Summary
+        if: >-
+          steps.bump-lint.outputs.changed == 'true' ||
+          steps.bump-makefile.outputs.changed == 'true'
+        run: |
+          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
+          {
+            printf -- '### Updates Available\n\n'
+            printf -- '- `tfplugindocs` can be updated in `%s` and `%s` to `%s`\n\n' \
+              '.github/workflows/lint.yml' \
+              'Makefile' \
+              "${{ steps.latest.outputs.version }}"
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Publish Pull Request Summary
+        if: steps.create-github-pull-request.conclusion == 'success'
+        # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
+        uses: craigsloggett/publish-pull-request-summary@f8a8c0651e685ddb88542a5d248673400ab70b71 # unreleased
+        with:
+          url: ${{ steps.create-github-pull-request.outputs.url }}

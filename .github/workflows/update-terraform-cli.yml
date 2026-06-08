@@ -1,0 +1,73 @@
+name: Update Terraform
+
+on:
+  workflow_call:
+    secrets:
+      GH_TOKEN:
+        description: Token used to check out, push branches, and open pull requests.
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  terraform:
+    name: terraform
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Resolve Latest Version
+        id: latest
+        run: |
+          version="$(
+            curl -sf https://checkpoint-api.hashicorp.com/v1/check/terraform |
+              jq -r '.current_version // empty'
+          )"
+          [ -n "${version}" ] || { echo 'failed to resolve terraform version' >&2; exit 1; }
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+
+      - name: Bump Lint Workflow
+        id: bump-lint
+        uses: craigsloggett/bump-version@85e673033cf965281d41ec89c94189a335fa7633 # v1.1.1
+        with:
+          file: .github/workflows/lint.yml
+          key: >-
+            .jobs.terraform-fmt.steps[] |
+            select(.uses | test("hashicorp/setup-terraform")) |
+            .with.terraform_version
+          version: ${{ steps.latest.outputs.version }}
+
+      - name: Create GitHub Pull Request
+        if: steps.bump-lint.outputs.changed == 'true'
+        id: create-github-pull-request
+        uses: craigsloggett/create-github-pull-request@29f3cbd0faff8c1bc2bfebc5cf1598fb8b6f417e # v1.1.0
+        with:
+          title: 'chore(ci): Bump terraform to ${{ steps.latest.outputs.version }}'
+          body: >-
+            Bump the pinned `terraform` version in `lint.yml` to
+            `${{ steps.latest.outputs.version }}`
+          branch: update/bump-terraform-${{ steps.latest.outputs.version }}
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Publish Available Updates in Step Summary
+        if: steps.bump-lint.outputs.changed == 'true'
+        run: |
+          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
+          {
+            printf -- '### Updates Available\n\n'
+            printf -- '- `terraform` can be updated in `%s` to `v%s`\n\n' \
+              '.github/workflows/lint.yml' \
+              "${{ steps.latest.outputs.version }}"
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Publish Pull Request Summary
+        if: steps.create-github-pull-request.conclusion == 'success'
+        # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
+        uses: craigsloggett/publish-pull-request-summary@f8a8c0651e685ddb88542a5d248673400ab70b71 # unreleased
+        with:
+          url: ${{ steps.create-github-pull-request.outputs.url }}
