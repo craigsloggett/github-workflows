@@ -65,19 +65,12 @@ jobs:
               "${{ steps.latest.outputs.version }}"
           } >>"${GITHUB_STEP_SUMMARY}"
 
-      - name: Publish Pull Request Details in Step Summary
+      - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
-        run: |
-          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
-          {
-            printf -- '### Pull Request Created\n\n'
-            printf -- '- URL: %s\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Files changed: %s/files\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Checks: %s/checks\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-          } >>"${GITHUB_STEP_SUMMARY}"
+        # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
+        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        with:
+          url: ${{ steps.create-github-pull-request.outputs.url }}
 
   govulncheck:
     name: govulncheck
@@ -145,19 +138,12 @@ jobs:
               "${{ steps.latest.outputs.version }}"
           } >>"${GITHUB_STEP_SUMMARY}"
 
-      - name: Publish Pull Request Details in Step Summary
+      - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
-        run: |
-          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
-          {
-            printf -- '### Pull Request Created\n\n'
-            printf -- '- URL: %s\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Files changed: %s/files\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Checks: %s/checks\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-          } >>"${GITHUB_STEP_SUMMARY}"
+        # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
+        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        with:
+          url: ${{ steps.create-github-pull-request.outputs.url }}
 
   golangci-lint:
     name: golangci-lint
@@ -225,19 +211,12 @@ jobs:
               "${{ steps.latest.outputs.version }}"
           } >>"${GITHUB_STEP_SUMMARY}"
 
-      - name: Publish Pull Request Details in Step Summary
+      - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
-        run: |
-          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
-          {
-            printf -- '### Pull Request Created\n\n'
-            printf -- '- URL: %s\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Files changed: %s/files\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Checks: %s/checks\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-          } >>"${GITHUB_STEP_SUMMARY}"
+        # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
+        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        with:
+          url: ${{ steps.create-github-pull-request.outputs.url }}
 
   tfplugindocs:
     name: tfplugindocs
@@ -305,16 +284,9 @@ jobs:
               "${{ steps.latest.outputs.version }}"
           } >>"${GITHUB_STEP_SUMMARY}"
 
-      - name: Publish Pull Request Details in Step Summary
+      - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
-        run: |-
-          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
-          {
-            printf -- '### Pull Request Created\n\n'
-            printf -- '- URL: %s\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Files changed: %s/files\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-            printf -- '- Checks: %s/checks\n' \
-              "${{ steps.create-github-pull-request.outputs.url }}"
-          } >>"${GITHUB_STEP_SUMMARY}"
+        # Pinned to the unreleased action HEAD for testing; repin to a release tag once cut.
+        uses: craigsloggett/publish-pull-request-summary@6e5b8903c067fcea5c19a9c11f7d31426ad1f663 # unreleased
+        with:
+          url: ${{ steps.create-github-pull-request.outputs.url }}
