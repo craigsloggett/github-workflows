@@ -11,6 +11,10 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  TOOL: terraform
+  LINT_FILE: .github/workflows/lint.yml
+
 jobs:
   terraform:
     name: terraform
@@ -22,36 +26,38 @@ jobs:
           token: ${{ secrets.GH_TOKEN }}
 
       - name: Resolve Latest Version
-        id: latest
         run: |
           version="$(
             curl -sf https://checkpoint-api.hashicorp.com/v1/check/terraform |
               jq -r '.current_version // empty'
           )"
-          [ -n "${version}" ] || { echo 'failed to resolve terraform version' >&2; exit 1; }
-          echo "version=${version}" >>"${GITHUB_OUTPUT}"
+          [ -n "${version}" ] || {
+            printf 'failed to resolve %s version\n' "${TOOL}" >&2
+            exit 1
+          }
+          printf 'VERSION=%s\n' "${version}" >>"${GITHUB_ENV}"
 
       - name: Bump Lint Workflow
         id: bump-lint
         uses: craigsloggett/bump-version@85e673033cf965281d41ec89c94189a335fa7633 # v1.1.1
         with:
-          file: .github/workflows/lint.yml
+          file: ${{ env.LINT_FILE }}
           key: >-
             .jobs.terraform-fmt.steps[] |
             select(.uses | test("hashicorp/setup-terraform")) |
             .with.terraform_version
-          version: ${{ steps.latest.outputs.version }}
+          version: ${{ env.VERSION }}
 
       - name: Create GitHub Pull Request
         if: steps.bump-lint.outputs.changed == 'true'
         id: create-github-pull-request
         uses: craigsloggett/create-github-pull-request@29f3cbd0faff8c1bc2bfebc5cf1598fb8b6f417e # v1.1.0
         with:
-          title: 'chore(ci): Bump terraform to ${{ steps.latest.outputs.version }}'
+          title: 'chore(ci): Bump ${{ env.TOOL }} to ${{ env.VERSION }}'
           body: >-
-            Bump the pinned `terraform` version in `lint.yml` to
-            `${{ steps.latest.outputs.version }}`
-          branch: update/bump-terraform-${{ steps.latest.outputs.version }}
+            Bump the pinned `${{ env.TOOL }}` version in `${{ env.LINT_FILE }}` to
+            `${{ env.VERSION }}`
+          branch: update/bump-${{ env.TOOL }}-${{ env.VERSION }}
           token: ${{ secrets.GH_TOKEN }}
 
       - name: Publish Available Updates in Step Summary
@@ -60,9 +66,10 @@ jobs:
           # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
           {
             printf -- '### Updates Available\n\n'
-            printf -- '- `terraform` can be updated in `%s` to `v%s`\n\n' \
-              '.github/workflows/lint.yml' \
-              "${{ steps.latest.outputs.version }}"
+            printf -- '- `%s` can be updated in `%s` to `v%s`\n\n' \
+              '${{ env.TOOL }}' \
+              '${{ env.LINT_FILE }}' \
+              '${{ env.VERSION }}'
           } >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Publish Pull Request Summary
