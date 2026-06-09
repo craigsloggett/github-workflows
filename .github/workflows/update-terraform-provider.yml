@@ -206,7 +206,6 @@ jobs:
 
       - name: Publish Pull Request Summary
         if: steps.create-github-pull-request.conclusion == 'success'
-        # Repin to a release tag once the action cuts a release.
-        uses: craigsloggett/publish-pull-request-summary@f8a8c0651e685ddb88542a5d248673400ab70b71 # unreleased
+        uses: craigsloggett/publish-pull-request-summary@ec0a0931be0ad9c8ad6d6d2775fbd7307be007f3 # v1.0.0
         with:
           url: ${{ steps.create-github-pull-request.outputs.url }}
