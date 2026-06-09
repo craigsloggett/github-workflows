@@ -57,33 +57,45 @@ jobs:
           key: GOLANGCI_LINT_VERSION
           version: ${{ env.VERSION }}
 
+      - name: Get Changed Files
+        id: changed-files
+        if: steps.bump-lint.outputs.changed == 'true' || steps.bump-makefile.outputs.changed == 'true'
+        env:
+          LINT_CHANGED: ${{ steps.bump-lint.outputs.changed }}
+          MAKEFILE_CHANGED: ${{ steps.bump-makefile.outputs.changed }}
+        run: |
+          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
+          {
+            printf 'files<<EOF\n'
+            [ "${LINT_CHANGED}" = 'true' ] &&
+              printf -- '- `%s`\n' "${LINT_FILE}"
+            [ "${MAKEFILE_CHANGED}" = 'true' ] &&
+              printf -- '- `%s`\n' "${MAKEFILE}"
+            printf 'EOF\n'
+          } >>"${GITHUB_OUTPUT}"
+
       - name: Create GitHub Pull Request
-        if: >-
-          steps.bump-lint.outputs.changed == 'true' ||
-          steps.bump-makefile.outputs.changed == 'true'
+        if: steps.bump-lint.outputs.changed == 'true' || steps.bump-makefile.outputs.changed == 'true'
         id: create-github-pull-request
         uses: craigsloggett/create-github-pull-request@29f3cbd0faff8c1bc2bfebc5cf1598fb8b6f417e # v1.1.0
         with:
           title: 'chore(build): Bump ${{ env.TOOL }} to ${{ env.VERSION }}'
-          body: >-
-            Bump the pinned `${{ env.TOOL }}` version in `${{ env.LINT_FILE }}` and
-            `${{ env.MAKEFILE }}` to `${{ env.VERSION }}`
+          body: |-
+            Bump the pinned `${{ env.TOOL }}` version to `${{ env.VERSION }}` in:
+            ${{ steps.changed-files.outputs.files }}
           branch: update/bump-${{ env.TOOL }}-${{ env.VERSION }}
           token: ${{ secrets.GH_TOKEN }}
 
       - name: Publish Available Updates in Step Summary
-        if: >-
-          steps.bump-lint.outputs.changed == 'true' ||
-          steps.bump-makefile.outputs.changed == 'true'
+        if: steps.bump-lint.outputs.changed == 'true' || steps.bump-makefile.outputs.changed == 'true'
+        env:
+          FILES: ${{ steps.changed-files.outputs.files }}
         run: |
           # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
           {
             printf -- '### Updates Available\n\n'
-            printf -- '- `%s` can be updated in `%s` and `%s` to `%s`\n\n' \
-              '${{ env.TOOL }}' \
-              '${{ env.LINT_FILE }}' \
-              '${{ env.MAKEFILE }}' \
-              '${{ env.VERSION }}'
+            printf -- '`%s` can be updated to `%s` in:\n\n' "${TOOL}" "${VERSION}"
+            printf -- '%s\n' "${FILES}"
           } >>"${GITHUB_STEP_SUMMARY}"
 
       - name: Publish Pull Request Summary
