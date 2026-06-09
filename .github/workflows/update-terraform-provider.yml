@@ -60,13 +60,13 @@ on:
 permissions: {}
 
 jobs:
-  config:
-    name: Config
+  render:
+    name: Render Matrix
     runs-on: ubuntu-24.04
     outputs:
       tools: ${{ steps.tools.outputs.json }}
     steps:
-      - name: Render Tools Matrix
+      - name: Render Matrix
         id: tools
         env:
           TOOLS: ${{ inputs.tools }}
@@ -115,12 +115,12 @@ jobs:
 
   update:
     name: ${{ matrix.tool }}
-    needs: config
+    needs: render
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.config.outputs.tools) }}
+        include: ${{ fromJSON(needs.render.outputs.tools) }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
