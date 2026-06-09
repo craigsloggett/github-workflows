@@ -114,7 +114,7 @@ jobs:
           printf 'json=%s\n' "${json}" >>"${GITHUB_OUTPUT}"
 
   update:
-    name: Update ${{ matrix.tool }}
+    name: ${{ matrix.tool }}
     needs: config
     runs-on: ubuntu-24.04
     strategy:
