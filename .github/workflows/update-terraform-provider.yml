@@ -1,0 +1,211 @@
+name: Update Terraform Provider Toolchain
+
+on:
+  workflow_call:
+    inputs:
+      tools:
+        description: >-
+          Tools to update, as a YAML list. Each entry sets tool, scope, and one
+          or two files (path and key). version_source (endpoint and jq_filter)
+          comes from the registry by tool name; set it inline to override or add
+          an unlisted tool.
+        type: string
+        default: |
+          - tool: terraform
+            scope: ci
+            files:
+              - path: .github/workflows/lint.yml
+                key: >-
+                  .jobs.terraform-fmt.steps[] |
+                  select(.uses | test("hashicorp/setup-terraform")) |
+                  .with.terraform_version
+          - tool: govulncheck
+            scope: build
+            files:
+              - path: .github/workflows/lint.yml
+                key: >-
+                  .jobs.govulncheck.steps[] |
+                  select(.env.GOVULNCHECK_VERSION) |
+                  .env.GOVULNCHECK_VERSION
+              - path: Makefile
+                key: GOVULNCHECK_VERSION
+          - tool: golangci-lint
+            scope: build
+            files:
+              - path: .github/workflows/lint.yml
+                key: >-
+                  .jobs["golangci-lint"].steps[] |
+                  select(.uses | test("golangci/golangci-lint-action")) |
+                  .with.version
+              - path: Makefile
+                key: GOLANGCI_LINT_VERSION
+          - tool: tfplugindocs
+            scope: build
+            files:
+              - path: .github/workflows/lint.yml
+                key: >-
+                  .jobs.tfplugindocs.steps[] |
+                  select(.run | test("tfplugindocs")) |
+                  .env.TFPLUGINDOCS_VERSION
+              - path: Makefile
+                key: TFPLUGINDOCS_VERSION
+    secrets:
+      GH_TOKEN:
+        description: >-
+          Personal access token for checkout, branch pushes, and pull requests.
+          Must not be github.token, whose PRs don't trigger pull_request
+          workflows.
+        required: true
+
+permissions: {}
+
+jobs:
+  render:
+    name: Render Matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      tools: ${{ steps.tools.outputs.json }}
+    steps:
+      - name: Render Matrix
+        id: tools
+        env:
+          TOOLS: ${{ inputs.tools }}
+          REGISTRY: |
+            terraform:
+              endpoint: https://checkpoint-api.hashicorp.com/v1/check/terraform
+              jq_filter: .current_version
+            govulncheck:
+              endpoint: https://proxy.golang.org/golang.org/x/vuln/@latest
+              jq_filter: .Version
+            golangci-lint:
+              endpoint: https://proxy.golang.org/github.com/golangci/golangci-lint/v2/@latest
+              jq_filter: .Version
+            tfplugindocs:
+              endpoint: https://proxy.golang.org/github.com/hashicorp/terraform-plugin-docs/@latest
+              jq_filter: .Version
+        run: |
+          tools="$(printf '%s\n' "${TOOLS}" | yq -o=json -I=0 '.')"
+          registry="$(printf '%s\n' "${REGISTRY}" | yq -o=json -I=0 '.')"
+
+          printf '%s\n' "${tools}" |
+            jq -e 'type == "array" and length > 0 and all(.tool | type == "string")' >/dev/null ||
+            { printf '%s\n' 'tools input must be a non-empty YAML list of entries naming a tool' >&2; exit 1; }
+
+          printf '%s\n' "${tools}" |
+            jq -e 'all(.files | 0 < length and length <= 2)' >/dev/null ||
+            { printf '%s\n' 'each tools entry requires one or two files' >&2; exit 1; }
+
+          json="$(
+            printf '%s\n' "${tools}" |
+              jq -c --argjson registry "${registry}" \
+                'map(.version_source //= $registry[.tool])'
+          )"
+
+          unknown="$(
+            printf '%s\n' "${json}" |
+              jq -r 'map(select(.version_source == null) | .tool) | join(", ")'
+          )"
+          [ -z "${unknown}" ] || {
+            printf 'unsupported tool(s): %s\n' "${unknown}" >&2
+            printf '%s\n' "${registry}" | jq -r '"supported: " + (keys | join(", "))' >&2
+            exit 1
+          }
+
+          printf 'json=%s\n' "${json}" >>"${GITHUB_OUTPUT}"
+
+  tool:
+    name: ${{ matrix.tool }}
+    needs: render
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.render.outputs.tools) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Resolve Latest Version
+        id: latest
+        env:
+          TOOL: ${{ matrix.tool }}
+          ENDPOINT: ${{ matrix.version_source.endpoint }}
+          JQ_FILTER: ${{ matrix.version_source.jq_filter }}
+        run: |
+          version="$(
+            curl --silent --fail --show-error --retry 2 "${ENDPOINT}" |
+              jq -r "${JQ_FILTER} // empty"
+          )"
+          [ -n "${version}" ] || {
+            printf 'failed to resolve %s version\n' "${TOOL}" >&2
+            exit 1
+          }
+          case "${version}" in
+            *[!0-9A-Za-z._-]*)
+              printf 'unexpected version format for %s: %s\n' "${TOOL}" "${version}" >&2
+              exit 1
+              ;;
+          esac
+          printf 'version=%s\n' "${version}" >>"${GITHUB_OUTPUT}"
+
+      - name: Bump ${{ matrix.files[0].path }}
+        uses: craigsloggett/bump-version@85e673033cf965281d41ec89c94189a335fa7633 # v1.1.1
+        with:
+          file: ${{ matrix.files[0].path }}
+          key: ${{ matrix.files[0].key }}
+          version: ${{ steps.latest.outputs.version }}
+
+      - name: Bump ${{ matrix.files[1].path }}
+        if: matrix.files[1].path
+        uses: craigsloggett/bump-version@85e673033cf965281d41ec89c94189a335fa7633 # v1.1.1
+        with:
+          file: ${{ matrix.files[1].path }}
+          key: ${{ matrix.files[1].key }}
+          version: ${{ steps.latest.outputs.version }}
+
+      - name: Get Changed Files
+        id: changed-files
+        run: |
+          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
+          {
+            printf 'files<<EOF\n'
+            git diff --name-only | while IFS= read -r file; do
+              printf -- '- `%s`\n' "${file}"
+            done
+            printf 'EOF\n'
+          } >>"${GITHUB_OUTPUT}"
+
+      - name: Publish Available Updates in Step Summary
+        if: steps.changed-files.outputs.files != ''
+        env:
+          TOOL: ${{ matrix.tool }}
+          VERSION: ${{ steps.latest.outputs.version }}
+          FILES: ${{ steps.changed-files.outputs.files }}
+        run: |
+          # shellcheck disable=SC2016 # Backticks here are literal Markdown code-spans.
+          {
+            printf -- '### Updates Available\n\n'
+            printf -- '`%s` can be updated to `%s` in:\n\n' "${TOOL}" "${VERSION}"
+            printf -- '%s\n\n' "${FILES}"
+          } >>"${GITHUB_STEP_SUMMARY}"
+
+      - name: Create GitHub Pull Request
+        if: steps.changed-files.outputs.files != ''
+        id: create-github-pull-request
+        uses: craigsloggett/create-github-pull-request@29f3cbd0faff8c1bc2bfebc5cf1598fb8b6f417e # v1.1.0
+        with:
+          title: 'chore(${{ matrix.scope }}): Bump ${{ matrix.tool }} to ${{ steps.latest.outputs.version }}'
+          body: |-
+            Bump the pinned `${{ matrix.tool }}` version to `${{ steps.latest.outputs.version }}` in:
+
+            ${{ steps.changed-files.outputs.files }}
+          branch: update/bump-${{ matrix.tool }}-${{ steps.latest.outputs.version }}
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Publish Pull Request Summary
+        if: steps.create-github-pull-request.conclusion == 'success'
+        uses: craigsloggett/publish-pull-request-summary@ec0a0931be0ad9c8ad6d6d2775fbd7307be007f3 # v1.0.0
+        with:
+          url: ${{ steps.create-github-pull-request.outputs.url }}
