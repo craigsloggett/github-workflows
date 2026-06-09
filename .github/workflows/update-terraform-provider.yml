@@ -113,7 +113,7 @@ jobs:
 
           printf 'json=%s\n' "${json}" >>"${GITHUB_OUTPUT}"
 
-  update:
+  tool:
     name: ${{ matrix.tool }}
     needs: render
     runs-on: ubuntu-24.04
