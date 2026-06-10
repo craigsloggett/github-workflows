@@ -64,13 +64,14 @@ jobs:
     name: Render Matrix
     runs-on: ubuntu-24.04
     outputs:
-      tools: ${{ steps.tools.outputs.json }}
+      tools: ${{ steps.render.outputs.json }}
     steps:
       - name: Render Matrix
-        id: tools
-        env:
-          TOOLS: ${{ inputs.tools }}
-          REGISTRY: |
+        id: render
+        uses: craigsloggett/render-github-workflow-matrix@c2ae2299741a4da9b5a49b89cb4228844066f82a # v0.1.0
+        with:
+          tools: ${{ inputs.tools }}
+          registry: |
             terraform:
               endpoint: https://checkpoint-api.hashicorp.com/v1/check/terraform
               jq_filter: .current_version
@@ -83,35 +84,6 @@ jobs:
             tfplugindocs:
               endpoint: https://proxy.golang.org/github.com/hashicorp/terraform-plugin-docs/@latest
               jq_filter: .Version
-        run: |
-          tools="$(printf '%s\n' "${TOOLS}" | yq -o=json '.')"
-          registry="$(printf '%s\n' "${REGISTRY}" | yq -o=json '.')"
-
-          printf '%s\n' "${tools}" |
-            jq -e 'type == "array" and length > 0 and all(.tool | type == "string")' >/dev/null ||
-            { printf '%s\n' 'tools input must be a non-empty YAML list of entries naming a tool' >&2; exit 1; }
-
-          printf '%s\n' "${tools}" |
-            jq -e 'all(.files | 0 < length and length <= 2)' >/dev/null ||
-            { printf '%s\n' 'each tools entry requires one or two files' >&2; exit 1; }
-
-          json="$(
-            printf '%s\n' "${tools}" |
-              jq -c --argjson registry "${registry}" \
-                'map(.version_source //= $registry[.tool])'
-          )"
-
-          unknown="$(
-            printf '%s\n' "${json}" |
-              jq -r 'map(select(.version_source == null) | .tool) | join(", ")'
-          )"
-          [ -z "${unknown}" ] || {
-            printf 'unsupported tool(s): %s\n' "${unknown}" >&2
-            printf '%s\n' "${registry}" | jq -r '"supported: " + (keys | join(", "))' >&2
-            exit 1
-          }
-
-          printf 'json=%s\n' "${json}" >>"${GITHUB_OUTPUT}"
 
   tool:
     name: ${{ matrix.tool }}
